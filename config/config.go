@@ -57,3 +57,4 @@ func LoadConf(path string) (*Config, error) {
 	}
 	return &cfg, nil
 }
+
