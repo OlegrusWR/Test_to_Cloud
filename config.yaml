@@ -1,0 +1,15 @@
+listen_port: 8080
+algoritm: "least_Conn"
+backends:
+  - "http://localhost:8081"
+  - "http://localhost:8082"
+  - "http://localhost:8082"
+health_check:
+  interval: "10s"
+  timeout: "2s"
+  path: "/health"
+logging:
+  level: "info"
+  file: "loadbalancer.log"
+
+
