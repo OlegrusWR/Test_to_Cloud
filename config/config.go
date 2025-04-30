@@ -40,12 +40,12 @@ func LoadConf(path string) (*Config, error) {   // Читаем наш конф�
 	}
 	var parseErr error
 
-	cfg.HelthCheck.Interval, parseErr = time.ParseDuration(cfg.HelthCheck.IntervalStr) // парсим строки в time.Duration
+	cfg.HealthCheck.Interval, parseErr = time.ParseDuration(cfg.HealthCheck.IntervalStr) // парсим строки в time.Duration
 	if parseErr != nil {
 		return nil, fmt.Errorf("недопустимый интервал проверки работоспособности: %w", parseErr)
 	} 
 	
-	cfg.HelthCheck.Timeout, parseErr = time.ParseDuration(cfg.HelthCheck.TimeoutStr)
+	cfg.HealthCheck.Timeout, parseErr = time.ParseDuration(cfg.HealthCheck.TimeoutStr)
 	if parseErr != nil {
 		return nil, fmt.Errorf("недопустимый тайм-аут проверки работоспособности: %w", parseErr)
 	} 

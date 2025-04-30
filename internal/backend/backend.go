@@ -1,6 +1,7 @@
 package backend
 
 import (
+	"errors"
 	"log"
 	"net/http"
 	"net/http/httputil"
@@ -24,6 +25,8 @@ type HealthCheck struct{
 	Path string
 	Client *http.Client
 }
+
+var ErrNoAliveServers = errors.New("нет доступных серверов")
 
 func NewServer(serverURL string, hc *HealthCheck) *Server {
 	target, _ := url.Parse(serverURL)
@@ -75,6 +78,11 @@ func (s *Server) SetAlive(alive bool){
 	s.alive = alive
 }
 
+func (s *Server) IsAlive() bool{
+	s.mu.Lock()
+	defer s.mu.Unlock()
+	return s.alive
+}
 func (s *Server) Serve(w http.ResponseWriter, r *http.Request){
 	s.mu.Lock()
 	s.connCount++
