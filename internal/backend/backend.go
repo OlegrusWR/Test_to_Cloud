@@ -17,6 +17,7 @@ type Server struct{
 	alive bool
 	healthCheck *HealthCheck
 	proxy *httputil.ReverseProxy
+	logger *log.Logger
 }
 
 type HealthCheck struct{
@@ -27,10 +28,23 @@ type HealthCheck struct{
 }
 
 var ErrNoAliveServers = errors.New("нет доступных серверов")
+var ErrInvalidUrl = errors.New("неверный URL-адрес сервера")
 
-func NewServer(serverURL string, hc *HealthCheck) *Server {
-	target, _ := url.Parse(serverURL)
+func NewServer(serverURL string, hc *HealthCheck, logger *log.Logger) (*Server, error) {
+	target, err := url.Parse(serverURL)
+		if err != nil {
+			return nil, ErrInvalidUrl
+		}
 	
+		client := &http.Client{
+			Timeout: hc.Timeout,
+			Transport: &http.Transport{
+				MaxIdleConns: 100,
+				IdleConnTimeout: 90,
+				DisableCompression: true,
+			},
+		}
+
 	s := &Server{
 		URL: serverURL,
 		alive: true,
@@ -38,20 +52,18 @@ func NewServer(serverURL string, hc *HealthCheck) *Server {
 			Interval: hc.Interval,
 			Timeout: hc.Timeout,
 			Path: hc.Path,
-			Client: &http.Client{
-				Timeout: hc.Timeout,
-			},
+			Client: client,
 		},
 		proxy: httputil.NewSingleHostReverseProxy(target),
 	}
 
 	s.proxy.ErrorHandler = func(w http.ResponseWriter, r *http.Request, err error) {
-		log.Printf("ошибка прокси для %s: %v", s.URL, err)
+		s.logger.Printf("ошибка прокси для %s: %v", s.URL, err)
 		s.SetAlive(false)
 		w.WriteHeader(http.StatusBadGateway)
 	}
 	go s.StartHealthCheck()
-	return s
+	return s, nil
 }
 
 func (s *Server) StartHealthCheck(){
@@ -73,7 +85,7 @@ func (s *Server) SetAlive(alive bool){
 	defer s.mu.Unlock()
 
 	if s.alive != alive {
-		log.Printf("Сервер %s изменил состояние на %v", s.URL, alive)
+		s.logger.Printf("Сервер %s изменил состояние на %v", s.URL, alive)
 	}
 	s.alive = alive
 }
@@ -83,7 +95,7 @@ func (s *Server) IsAlive() bool{
 	defer s.mu.Unlock()
 	return s.alive
 }
-func (s *Server) Serve(w http.ResponseWriter, r *http.Request){
+func (s *Server) ServeHTTP(w http.ResponseWriter, r *http.Request){
 	s.mu.Lock()
 	s.connCount++
 	s.mu.Unlock()
@@ -93,7 +105,7 @@ func (s *Server) Serve(w http.ResponseWriter, r *http.Request){
 		s.connCount--
 		s.mu.Unlock()
 	}()
-
+	s.logger.Printf("проксирующий запрос на %s%s", s.URL, r.URL.Path)
 	s.proxy.ServeHTTP(w, r)
 
 }
