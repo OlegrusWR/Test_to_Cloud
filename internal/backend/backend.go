@@ -10,66 +10,74 @@ import (
 	"time"
 )
 
-type Server struct{
-	URL string
-	mu sync.RWMutex
-	connCount int
-	alive bool
-	healthCheck *HealthCheck
-	proxy *httputil.ReverseProxy
-	logger *log.Logger
+//Server представляет бэкенд-сервер для балансировки нагрузки
+type Server struct {                                    
+	URL          string
+	mu           sync.RWMutex
+	connCount    int
+	alive        bool
+	healthCheck  *HealthCheck
+	proxy        *httputil.ReverseProxy
+	logger       *log.Logger
 }
 
-type HealthCheck struct{
+// HealthCheck содержит параметры проверки здоровья серверов
+type HealthCheck struct {                               
 	Interval time.Duration
-	Timeout time.Duration
-	Path string
-	Client *http.Client
+	Timeout  time.Duration
+	Path     string
+	Client   *http.Client
 }
 
-var ErrNoAliveServers = errors.New("нет доступных серверов")
-var ErrInvalidUrl = errors.New("неверный URL-адрес сервера")
+var (
+	ErrNoAliveServers = errors.New("нет живых серверов")
+	ErrInvalidUrl     = errors.New("неверный URL")
+)
 
+
+// NewServer создаем новый экземпляр сервера с health-check и reverse proxy
 func NewServer(serverURL string, hc *HealthCheck, logger *log.Logger) (*Server, error) {
 	target, err := url.Parse(serverURL)
-		if err != nil {
-			return nil, ErrInvalidUrl
-		}
-	
-		client := &http.Client{
-			Timeout: hc.Timeout,
-			Transport: &http.Transport{
-				MaxIdleConns: 100,
-				IdleConnTimeout: 90,
-				DisableCompression: true,
-			},
-		}
+	if err != nil {
+		return nil, ErrInvalidUrl
+	}
 
-	s := &Server{
-		URL: serverURL,
+	client := &http.Client{
+		Timeout: hc.Timeout,
+	}
+
+	server := &Server{                // Создаем экземпляр сервера
+		URL:  serverURL,
 		alive: true,
 		healthCheck: &HealthCheck{
 			Interval: hc.Interval,
-			Timeout: hc.Timeout,
-			Path: hc.Path,
-			Client: client,
+			Timeout:  hc.Timeout,
+			Path:     hc.Path,
+			Client:   client,
 		},
-		proxy: httputil.NewSingleHostReverseProxy(target),
+		proxy:  httputil.NewSingleHostReverseProxy(target),  // Инициализация прокси
+		logger: logger,
 	}
 
-	s.proxy.ErrorHandler = func(w http.ResponseWriter, r *http.Request, err error) {
-		s.logger.Printf("ошибка прокси для %s: %v", s.URL, err)
-		s.SetAlive(false)
-		w.WriteHeader(http.StatusBadGateway)
+	// обработчик ошибок прокси
+	server.proxy.ErrorHandler = func(w http.ResponseWriter, r *http.Request, err error) {  
+
+		server.logger.Printf("ошибка прокси: %v", err)
+		server.SetAlive(false)									// При ошибке помечаем сервер "мертвым"
+		w.WriteHeader(http.StatusBadGateway)					// 502 Bad Gateway
 	}
-	go s.StartHealthCheck()
-	return s, nil
+
+	go server.StartHealthCheck()
+	return server, nil
 }
 
-func (s *Server) StartHealthCheck(){
+// StartHealthCheck запускает периодическую проверку здоровья сервера
+// Используем ticker для проверок с заданным интервалом
+func (s *Server) StartHealthCheck() {
 	ticker := time.NewTicker(s.healthCheck.Interval)
 	defer ticker.Stop()
 
+	// Бесконечный цикл проверок
 	for range ticker.C {
 		resp, err := s.healthCheck.Client.Get(s.URL + s.healthCheck.Path)
 		alive := err == nil && resp.StatusCode == http.StatusOK
@@ -79,38 +87,41 @@ func (s *Server) StartHealthCheck(){
 		s.SetAlive(alive)
 	}
 }
-
-func (s *Server) SetAlive(alive bool){
+// SetAlive обновляет статус сервера
+func (s *Server) SetAlive(alive bool) {
 	s.mu.Lock()
 	defer s.mu.Unlock()
-
-	if s.alive != alive {
-		s.logger.Printf("Сервер %s изменил состояние на %v", s.URL, alive)
-	}
 	s.alive = alive
+	s.logger.Printf("Сервер %s состояние: alive=%v", s.URL, alive)
 }
 
-func (s *Server) IsAlive() bool{
-	s.mu.Lock()
-	defer s.mu.Unlock()
+//IsAlive возвращает текущий статус сервера
+func (s *Server) IsAlive() bool {
+	s.mu.RLock()
+	defer s.mu.RUnlock()
 	return s.alive
 }
-func (s *Server) ServeHTTP(w http.ResponseWriter, r *http.Request){
+
+// ServeHTTP обрабатывает входящий HTTP-запрос
+func (s *Server) ServeHTTP(w http.ResponseWriter, r *http.Request) {
+	// Увеличение счетчика
 	s.mu.Lock()
 	s.connCount++
 	s.mu.Unlock()
-
-	defer func ()  {
+	
+	// Уменишение счетчика по завершению
+	defer func() {
 		s.mu.Lock()
 		s.connCount--
 		s.mu.Unlock()
 	}()
-	s.logger.Printf("проксирующий запрос на %s%s", s.URL, r.URL.Path)
-	s.proxy.ServeHTTP(w, r)
 
+	// Проксирование запроса
+	s.proxy.ServeHTTP(w, r)
 }
 
-func (s * Server) GetConnCount() int {
+// GetConnCount возвращает текущее количество активных соединений
+func (s *Server) GetConnCount() int {
 	s.mu.RLock()
 	defer s.mu.RUnlock()
 	return s.connCount

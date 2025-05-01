@@ -1,30 +1,39 @@
 package logger
 
-import(
+import (
 	"log"
 	"os"
 	"sync"
 )
 
 var (
-	once sync.Once 
-	instance *log.Logger
+	once     sync.Once     // Гарантирует однократную инициализацию
+	instance *log.Logger   // Единственный экземпляр логгера
 )
 
-func Init(logFile string) *log.Logger {			// проводим инициализацию логгера, используем sync.Once, 
-	once.Do(func() {							// чтобы логгер каждыи раз не инициализировался
+// Init инициализирует логгер с записью в файл
+func Init(logFile string) *log.Logger {
+	once.Do(func() {
+
+		// Открываем файл логов с режимами:
+		// O_APPEND - дописывать в конец
+		// O_CREATE - создать если не существует
+		// O_WRONLY - только запись
+		// Права 0644: владелец (rw), группа (r), остальные (r)
 		file, err := os.OpenFile(logFile, os.O_APPEND|os.O_CREATE|os.O_WRONLY, 0644)
 		if err != nil {
-			log.Fatal("ошибка открытия логгер файла", err)
+			log.Fatalf("ошибка открытия файла логов: %v", err)
 		}
-		instance = log.New(file, "BALANCER", log.Ldate|log.Ltime|log.Lshortfile)
+		// Создаем экземпляр логгера
+		instance = log.New(file, "BALANCER ", log.Ldate|log.Ltime|log.Lshortfile)
 	})
 	return instance
 }
 
-func Get() *log.Logger{
+// Get возвращает инициализированный экземпляр логгера
+func Get() *log.Logger {
 	if instance == nil {
-		log.Fatal("Логгер не инициализирован")
+		log.Fatal("логгер не инициализирован")
 	}
 	return instance
 }

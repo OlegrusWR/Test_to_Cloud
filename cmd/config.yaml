@@ -3,7 +3,7 @@ algoritm: "least_conn"
 backends:
   - "http://localhost:8081"
   - "http://localhost:8082"
-  - "http://localhost:8082"
+  - "http://localhost:8083"
 health_check:
   interval: "10s"
   timeout: "2s"
