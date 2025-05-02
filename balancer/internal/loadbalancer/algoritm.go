@@ -1,9 +1,10 @@
 package loadbalancer
 
 import (
-	"net/http"
+
 	"sync"
 	"github.com/OlegrusWR/balancer_to_cloud/internal/backend"
+	"sync/atomic"
 )
 
 // LeastConn - стратегия балансировки "Наименьшее количество соединений"
@@ -17,7 +18,7 @@ func NewLeastConn() *LeastConn {
 }
 
 // SelectServer выбирает сервер с наименьшим количеством активных соединений
-func (lc *LeastConn) SelectServer(servers []*backend.Server, r *http.Request) (*backend.Server, error) {
+func (lc *LeastConn) SelectServer(servers []*backend.Server) (*backend.Server, error) {
 	lc.mu.Lock()
 	defer lc.mu.Unlock()
 
@@ -46,4 +47,28 @@ func (lc *LeastConn) SelectServer(servers []*backend.Server, r *http.Request) (*
 		return nil, backend.ErrNoAliveServers
 	}
 	return selected, nil
+}
+
+type RoundRobin struct {
+	counter uint64
+}
+
+func NewRoundRobin() *RoundRobin {
+	return &RoundRobin{}
+}
+
+func (rr *RoundRobin) SelectServer(servers []*backend.Server) (*backend.Server, error) {
+	start := atomic.AddUint64(&rr.counter, 1)
+	size := uint64(len(servers))
+
+	for i := uint64(0); i < size; i++ {
+		idx := (start + i) % size
+		server := servers[idx]
+		
+		if server.IsAlive() {
+			return server, nil
+		}
+	}
+
+	return nil, backend.ErrNoAliveServers
 }

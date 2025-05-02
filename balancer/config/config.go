@@ -7,18 +7,12 @@ import (
 	"gopkg.in/yaml.v2"
 )
 
-type HealthCheckConfig struct {                  // Структура для проверки сервера, на то жив он или нет
+type HealthCheckConfig struct {                 
 	Interval time.Duration `yaml:"interval"` 
 	Timeout  time.Duration `yaml:"timeout"`
 	Path     string        `yaml:"path"`
 }
 
-type LogConfig struct {                          // Структура для логгера, указываем уровень(инфо)
-	Level string `yaml:"level"`  				 // и фаил, куда все логи будут записываться
-	LBalancerFile  string `yaml:"lbfile"` 
-	DataBaseFile string `yaml:"dbfile"`
-	RateLimitFile string `yaml:"rlfile"`
-}
 type RateLimiterConfig struct {
     Enabled         bool            `yaml:"enabled"`
     DefaultCapacity int             `yaml:"default_capacity"`
@@ -33,7 +27,6 @@ type Config struct {
     Algoritm     string           `yaml:"algoritm"`
     Backends     []string         `yaml:"backends"`
     HealthCheck  HealthCheckConfig `yaml:"health_check"`
-    Logging      LogConfig        `yaml:"logging"`
     RateLimiter  RateLimiterConfig `yaml:"rate_limiter"`
 }
 

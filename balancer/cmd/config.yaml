@@ -1,5 +1,5 @@
 listen_port: 8080
-algoritm: "least_conn"
+algoritm: "least_conn" # или "round_robin"
 backends:
   - "http://localhost:8081"
   - "http://localhost:8082"
@@ -8,15 +8,10 @@ health_check:
   interval: "10s"
   timeout: "2s"
   path: "/health"
-logging:
-  level: "info"
-  lbfile: "../log/loadbalancer.log"
-  dbfile: "../log/database.log"
-  rlfile: "../log/ratelimit.log"
 rate_limiter:
   default_capacity: 100          
-  default_rate: "60s"              
+  default_rate: "2s"              
   vip_capacity: 300               
-  vip_rate: "20s"               
+  vip_rate: "500ms"               
   db_path: "../data/ratelimit.db"    
 

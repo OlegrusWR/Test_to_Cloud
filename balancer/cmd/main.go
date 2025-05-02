@@ -8,12 +8,12 @@ import (
 	"os/signal"
 	"syscall"
 	"time"
-	"strings"
 
 	"github.com/OlegrusWR/balancer_to_cloud/config"
 	"github.com/OlegrusWR/balancer_to_cloud/internal/backend"
 	"github.com/OlegrusWR/balancer_to_cloud/internal/loadbalancer"
 	"github.com/OlegrusWR/balancer_to_cloud/internal/logger"
+	"github.com/OlegrusWR/balancer_to_cloud/internal/ratelimiter"
 )
 
 func main() {
@@ -23,15 +23,34 @@ func main() {
 		log.Fatalf("ошибка загрузки конфига: %v", err)
 	}
 	// Инициализация логгеров
-	// rlLogger := logger.InitRateLimitLogger(cfg.Logging.RateLimitFile)
-	// dbLogger := logger.InitDataBaseLogger(cfg.Logging.DataBaseFile)
-	bLogger := logger.InitBalancerLogger(cfg.Logging.LBalancerFile)
-	defer bLogger.Println("завершение работы")
+	bLogger := logger.NewLogger("BALANCER", "../log/loadbalancer.log")
+	dbLogger := logger.NewLogger("DATABASE", "../log/database.log")
+	rlLogger := logger.NewLogger("RATELIMIT", "../log/ratelimit.log")
 
-	// Проверка алгоритма балансировки (пока так, если успею, то будет проверка какой алгоритм выбраран в конфиге)
-	if strings.ToLower(cfg.Algoritm) != "least_conn" {
-		bLogger.Fatal("поддерживается только алгоритм 'least_conn'")
+	defer func() {
+		bLogger.Println("Завершение работы балансировщика")
+		dbLogger.Println("Завершение работы базы данных")
+		rlLogger.Println("Завершение работы rate limiter")
+	}()
+
+	
+	rlStorage, err := ratelimiter.NewStorage(cfg.RateLimiter.DBPath, rlLogger)
+	if err != nil {
+		dbLogger.Fatal("Ошибка инициализации хранилища rate limiter")
 	}
+
+	rlConfig := ratelimiter.NewConfigFrom(cfg.RateLimiter)
+	rateLimiter := ratelimiter.NewService(rlConfig, rlStorage, rlLogger)
+
+	
+	go func() {
+		adminMux := http.NewServeMux()
+		adminMux.Handle("/admin/vip", rateLimiter.AdminHandler())
+		rlLogger.Printf("Админ-сервер запущен на :8888")
+		if err := http.ListenAndServe(":9888", adminMux); err != nil {
+			rlLogger.Fatalf("Ошибка админ-сервера: %v", err)
+		}
+	}()
 
 	// Настройка health-check
 	hc := &backend.HealthCheck{
@@ -50,19 +69,29 @@ func main() {
 		servers = append(servers, server)
 	}
 
+	var algoritm loadbalancer.Balancer
+	switch cfg.Algoritm {
+	case "round_robin":
+		algoritm = loadbalancer.NewRoundRobin()
+	default:
+		algoritm = loadbalancer.NewLeastConn()
+	}
+
+	// Инициализация балансировщика
+	lb := loadbalancer.NewLoadBalancer(servers, algoritm, bLogger)
+
 	// Настройка порта, если порт не казан, то будет выбрал по умолчанию 8080
 	port := cfg.Listen_port
 	if port == "" {
 		port = "8080"
 	}
 
-	// Инициализация балансировщика
-	lb := loadbalancer.NewLoadBalancer(servers, loadbalancer.NewLeastConn(), bLogger)
+	handler := rateLimiter.Middleware(lb)
 
 	// Настройка HTTP-сервера
 	server := &http.Server{
 		Addr:    ":" + port,
-		Handler: lb,
+		Handler: handler,
 	}
 
 	// Настройка graceful shutdown

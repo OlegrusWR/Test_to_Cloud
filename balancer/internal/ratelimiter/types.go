@@ -1,7 +1,9 @@
 package ratelimiter
 
-import "time"
-
+import (
+	"time"
+"github.com/OlegrusWR/balancer_to_cloud/config"
+)
 type Config struct {
     DefaultCapacity int           `yaml:"default_capacity"`
     DefaultRate     time.Duration `yaml:"default_rate"`
@@ -15,4 +17,14 @@ type Client struct {
     Capacity int
     Rate     time.Duration
     IsVIP    bool
+}
+
+func NewConfigFrom(cfg config.RateLimiterConfig) Config {
+    return Config{
+        DefaultCapacity: cfg.DefaultCapacity,
+        DefaultRate:     cfg.DefaultRate,
+        VIPCapacity:     cfg.VIPCapacity,
+        VIPRate:         cfg.VIPRate,
+        DBPath:          cfg.DBPath,
+    }
 }

@@ -9,7 +9,7 @@ import (
 )
 // Balancer определяет интерфейс для стратегий балансировки (Если успею, то сделаю еще одну стратегию)
 type Balancer interface {
-	SelectServer(servers []*backend.Server, r *http.Request) (*backend.Server, error)
+	SelectServer(servers []*backend.Server) (*backend.Server, error)
 }
 
 // LoadBalancer - основной тип, реализующий балансировку HTTP-запросов
@@ -21,21 +21,21 @@ type Balancer interface {
 type LoadBalancer struct {
 	mu      sync.RWMutex
 	servers []*backend.Server
-	strategy Balancer
+	algoritm Balancer
 	logger  logger.Logger
 }
 
 // NewLoadBalancer создает новый экземпляр балансировщика
 // Параметры:
 // - servers: список бэкенд-серверов для балансировки
-// - strategy: стратегия выбора сервера
+// - algoritm: алгоритм выбора сервера
 // - logger: логгер для записи событий
 // Возвращает:
 // - *LoadBalancer: готовый к работе экземпляр балансировщика
-func NewLoadBalancer(servers []*backend.Server, strategy Balancer, logger logger.Logger) *LoadBalancer {
+func NewLoadBalancer(servers []*backend.Server, algoritm Balancer, logger logger.Logger) *LoadBalancer {
 	return &LoadBalancer{
 		servers:  servers,
-		strategy: strategy,
+		algoritm: algoritm,
 		logger:   logger,
 	}
 }
@@ -46,7 +46,7 @@ func (lb *LoadBalancer) ServeHTTP(w http.ResponseWriter, r *http.Request) {
     
 	// Безопасное чтение списка серверов
     lb.mu.RLock()
-    server, err := lb.strategy.SelectServer(lb.servers, r)
+    server, err := lb.algoritm.SelectServer(lb.servers)
     lb.mu.RUnlock()
 
 	// Обработка ошибок выбора сервера
