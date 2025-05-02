@@ -7,12 +7,12 @@ import (
 )
 
 var (
-	once     sync.Once     // Гарантирует однократную инициализацию
-	instance *log.Logger   // Единственный экземпляр логгера
+	once     sync.Once    
+	instance Logger  
 )
 
 // Init инициализирует логгер с записью в файл
-func Init(logFile string) *log.Logger {
+func Init(logFile string) Logger {
 	once.Do(func() {
 
 		// Открываем файл логов с режимами:
@@ -25,13 +25,15 @@ func Init(logFile string) *log.Logger {
 			log.Fatalf("ошибка открытия файла логов: %v", err)
 		}
 		// Создаем экземпляр логгера
-		instance = log.New(file, "BALANCER ", log.Ldate|log.Ltime|log.Lshortfile)
+		instance = &StdLogger{
+			Logger: log.New(file, "BALANCER ", log.Ldate|log.Ltime|log.Lshortfile),
+	}
 	})
 	return instance
 }
 
 // Get возвращает инициализированный экземпляр логгера
-func Get() *log.Logger {
+func Get() Logger {
 	if instance == nil {
 		log.Fatal("логгер не инициализирован")
 	}
