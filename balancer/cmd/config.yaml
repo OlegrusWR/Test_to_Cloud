@@ -10,6 +10,13 @@ health_check:
   path: "/health"
 logging:
   level: "info"
-  file: "loadbalancer.log"
-
+  lbfile: "../log/loadbalancer.log"
+  dbfile: "../log/database.log"
+  rlfile: "../log/ratelimit.log"
+rate_limiter:
+  default_capacity: 100          
+  default_rate: "60s"              
+  vip_capacity: 300               
+  vip_rate: "20s"               
+  db_path: "../data/ratelimit.db"    
 

@@ -2,12 +2,13 @@ package backend
 
 import (
 	"errors"
-	"log"
 	"net/http"
 	"net/http/httputil"
 	"net/url"
 	"sync"
 	"time"
+	
+	"github.com/OlegrusWR/balancer_to_cloud/internal/logger"
 )
 
 //Server представляет бэкенд-сервер для балансировки нагрузки
@@ -18,7 +19,7 @@ type Server struct {
 	alive        bool
 	healthCheck  *HealthCheck
 	proxy        *httputil.ReverseProxy
-	logger       *log.Logger
+	logger       logger.Logger
 }
 
 // HealthCheck содержит параметры проверки здоровья серверов
@@ -36,7 +37,7 @@ var (
 
 
 // NewServer создаем новый экземпляр сервера с health-check и reverse proxy
-func NewServer(serverURL string, hc *HealthCheck, logger *log.Logger) (*Server, error) {
+func NewServer(serverURL string, hc *HealthCheck, logger logger.Logger) (*Server, error) {
 	target, err := url.Parse(serverURL)
 	if err != nil {
 		return nil, ErrInvalidUrl

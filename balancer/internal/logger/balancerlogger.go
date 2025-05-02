@@ -12,7 +12,7 @@ var (
 )
 
 // Init инициализирует логгер с записью в файл
-func Init(logFile string) Logger {
+func InitBalancerLogger(logFile string) Logger {
 	once.Do(func() {
 
 		// Открываем файл логов с режимами:
@@ -33,9 +33,15 @@ func Init(logFile string) Logger {
 }
 
 // Get возвращает инициализированный экземпляр логгера
-func Get() Logger {
+func BGet() Logger {
 	if instance == nil {
 		log.Fatal("логгер не инициализирован")
 	}
 	return instance
+}
+
+func InitBLogger(logfile string) Logger {
+	logger := InitDBLogger("db.log")
+	logger.Println("Database logger initialized")
+	return logger
 }

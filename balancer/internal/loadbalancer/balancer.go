@@ -3,8 +3,9 @@ package loadbalancer
 import (
 	"net/http"
 	"sync"
-	"log"
 	"github.com/OlegrusWR/balancer_to_cloud/internal/backend"
+	"github.com/OlegrusWR/balancer_to_cloud/internal/logger"
+
 )
 // Balancer определяет интерфейс для стратегий балансировки (Если успею, то сделаю еще одну стратегию)
 type Balancer interface {
@@ -21,7 +22,7 @@ type LoadBalancer struct {
 	mu      sync.RWMutex
 	servers []*backend.Server
 	strategy Balancer
-	logger  *log.Logger
+	logger  logger.Logger
 }
 
 // NewLoadBalancer создает новый экземпляр балансировщика
@@ -31,7 +32,7 @@ type LoadBalancer struct {
 // - logger: логгер для записи событий
 // Возвращает:
 // - *LoadBalancer: готовый к работе экземпляр балансировщика
-func NewLoadBalancer(servers []*backend.Server, strategy Balancer, logger *log.Logger) *LoadBalancer {
+func NewLoadBalancer(servers []*backend.Server, strategy Balancer, logger logger.Logger) *LoadBalancer {
 	return &LoadBalancer{
 		servers:  servers,
 		strategy: strategy,

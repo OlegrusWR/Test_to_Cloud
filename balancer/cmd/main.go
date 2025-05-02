@@ -22,14 +22,15 @@ func main() {
 	if err != nil {
 		log.Fatalf("ошибка загрузки конфига: %v", err)
 	}
-	// Инициализация логгера
-	logger.Init(cfg.Logging.File)
-	lg := logger.Get()
-	defer lg.Println("завершение работы")
+	// Инициализация логгеров
+	// rlLogger := logger.InitRateLimitLogger(cfg.Logging.RateLimitFile)
+	// dbLogger := logger.InitDataBaseLogger(cfg.Logging.DataBaseFile)
+	bLogger := logger.InitBalancerLogger(cfg.Logging.LBalancerFile)
+	defer bLogger.Println("завершение работы")
 
 	// Проверка алгоритма балансировки (пока так, если успею, то будет проверка какой алгоритм выбраран в конфиге)
 	if strings.ToLower(cfg.Algoritm) != "least_conn" {
-		lg.Fatal("поддерживается только алгоритм 'least_conn'")
+		bLogger.Fatal("поддерживается только алгоритм 'least_conn'")
 	}
 
 	// Настройка health-check
@@ -42,9 +43,9 @@ func main() {
 	// Создание серверов
 	servers := make([]*backend.Server, 0)
 	for _, url := range cfg.Backends {
-		server, err := backend.NewServer(url, hc, lg)
+		server, err := backend.NewServer(url, hc, bLogger)
 		if err != nil {
-			lg.Fatalf("ошибка создания сервера: %v", err)
+			bLogger.Fatalf("ошибка создания сервера: %v", err)
 		}
 		servers = append(servers, server)
 	}
@@ -56,7 +57,7 @@ func main() {
 	}
 
 	// Инициализация балансировщика
-	lb := loadbalancer.NewLoadBalancer(servers, loadbalancer.NewLeastConn(), lg)
+	lb := loadbalancer.NewLoadBalancer(servers, loadbalancer.NewLeastConn(), bLogger)
 
 	// Настройка HTTP-сервера
 	server := &http.Server{
@@ -70,21 +71,21 @@ func main() {
 
 	// Запуск сервера в горутине
 	go func() {
-		lg.Printf("запуск сервера на :%s", port)
+		bLogger.Printf("запуск сервера на :%s", port)
 		if err := server.ListenAndServe(); err != nil && err != http.ErrServerClosed {
-			lg.Fatalf("ошибка сервера: %v", err)
+			bLogger.Fatalf("ошибка сервера: %v", err)
 		}
 	}()
 
 	//Ожидание сигнала завершения
 	<-done
-	lg.Println("завершение работы...")
+	bLogger.Println("завершение работы...")
 
 	// Graceful shutdown с таймаутом
 	ctx, cancel := context.WithTimeout(context.Background(), 5*time.Second)
 	defer cancel()
 
 	if err := server.Shutdown(ctx); err != nil {
-		lg.Printf("ошибка завершения: %v", err)
+		bLogger.Printf("ошибка завершения: %v", err)
 	}
 }
